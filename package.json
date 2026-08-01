@@ -1,0 +1,15 @@
+{
+  "name": "graneth-mcp",
+  "private": true,
+  "type": "module",
+  "description": "Account-free MCP server that checks AI-written changes before they are committed: hallucinated packages, dependency risk, hardcoded secrets.",
+  "scripts": {
+    "build": "pnpm --filter @graneth/mcp-server build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

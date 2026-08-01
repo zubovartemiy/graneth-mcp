@@ -1,0 +1,21 @@
+{
+  "name": "@graneth/core-checks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-free security check primitives (hallucinated-package + secret detection) shared by the Graneth server and @graneth/mcp-server. Internal: consumed as a workspace package and bundled into @graneth/mcp-server from source — never published on its own.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "LICENSE"],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist"
+  }
+}

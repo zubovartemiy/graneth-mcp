@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.graneth/mcp-server",
+  "description": "Pre-flight check for AI coding agents: hallucinated packages + hardcoded secrets. Free, no account.",
+  "websiteUrl": "https://graneth.com/docs",
+  "version": "0.6.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@graneth/mcp-server",
+      "version": "0.6.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://graneth.com/api/mcp"
+    }
+  ]
+}

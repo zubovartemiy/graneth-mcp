@@ -1,0 +1,39 @@
+{
+  "name": "@graneth/mcp-server",
+  "version": "0.7.0",
+  "mcpName": "com.graneth/mcp-server",
+  "description": "Account-free MCP server: catch AI-hallucinated packages (npm, PyPI, crates.io, RubyGems, Go, Packagist), risk-score the dependencies an AI agent introduces, and find hardcoded secrets before you commit. Exposes the free pre_flight_check tool over stdio.",
+  "type": "module",
+  "bin": {
+    "graneth-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "security",
+    "slopsquatting",
+    "ai",
+    "claude",
+    "cursor",
+    "supply-chain"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "prepublishOnly": "tsup"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}
