@@ -3,12 +3,12 @@
   "name": "com.graneth/mcp-server",
   "description": "Pre-flight check for AI coding agents: hallucinated packages + hardcoded secrets. Free, no account.",
   "websiteUrl": "https://graneth.com/docs",
-  "version": "0.6.0",
+  "version": "0.7.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@graneth/mcp-server",
-      "version": "0.6.0",
+      "version": "0.7.1",
       "transport": {
         "type": "stdio"
       }
