@@ -4,6 +4,15 @@
   "mcpName": "com.graneth/mcp-server",
   "description": "Account-free MCP server: catch AI-hallucinated packages (npm, PyPI, crates.io, RubyGems, Go, Packagist), risk-score the dependencies an AI agent introduces, and find hardcoded secrets before you commit. Exposes the free pre_flight_check tool over stdio.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zubovartemiy/graneth-mcp.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://graneth.com/docs",
+  "bugs": {
+    "url": "https://github.com/zubovartemiy/graneth-mcp/issues"
+  },
   "bin": {
     "graneth-mcp-server": "dist/index.js"
   },

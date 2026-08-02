@@ -120,26 +120,32 @@ Privacy is structural, not a promise:
 ## How it relates to Graneth
 
 This server shares its detection core with the hosted
-[Graneth](https://github.com/zubovartemiy/graneth-dashboard) scanner via the internal `@graneth/core-checks`
-module, so local pre-flight results match what the full PR scan would find.
+[Graneth](https://graneth.com) scanner via the `@graneth/core-checks` module —
+published in full alongside this package at
+[zubovartemiy/graneth-mcp](https://github.com/zubovartemiy/graneth-mcp) — so
+local pre-flight results match what the full PR scan would find.
 
-## Releasing (maintainers)
+## How this package is released
 
-One command, from the repo root:
+The release script itself lives in the private monorepo, not in this tree — but
+what it refuses to do is worth stating, because it is the reason a
+supply-chain tool can be trusted with its own supply chain. Every step fails
+CLOSED:
 
-```bash
-pnpm release:mcp            # every guard, then publish (asks for the 2FA OTP)
-pnpm release:mcp --dry-run  # everything except the upload
-```
+1. the monorepo's root manifest must still be `private:true`;
+2. the package being released must be exactly `@graneth/mcp-server`;
+3. branch `master`, clean working tree;
+4. the bundled threat-feed snapshot is refreshed first — a changed snapshot
+   stops the release until its diff is reviewed and committed;
+5. the tarball's file list is checked against a hard allowlist — one file
+   outside `dist/`, `README.md`, `LICENSE`, `package.json` aborts the publish;
+6. the public mirror you are reading must match the tree being released,
+   compared file by file, so the `repository` link cannot point at older code
+   than the package.
 
-`scripts/release-mcp.mjs` fails CLOSED on each step: root manifest must still
-be `private:true`; the package must be exactly `@graneth/mcp-server`; branch
-master + clean tree; the bundled threat-feed snapshot is refreshed (a changed
-snapshot stops the release until its diff is reviewed and committed); and the
-tarball file list is verified against a hard allowlist — one file outside
-`dist/`, `README.md`, `LICENSE`, `package.json` aborts the publish. That last
-guard is what makes "accidentally release the whole repository" structurally
-impossible, not just unlikely.
+Guard 5 is what makes "accidentally publish the whole repository" structurally
+impossible rather than merely unlikely — this project has the incident that
+taught it.
 
 ## License
 
