@@ -64,3 +64,71 @@ describe("every place that states this package's version agrees", () => {
     expect(manifestVersion()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
+
+/**
+ * ── AND THE FOURTH PLACE, WHICH THIS GUARD COULD NOT SEE ────────────────────
+ *
+ * The block above pins three files INSIDE this package. On 2026-08-07 a second
+ * registry manifest was found at `distribution-drafts/server.json`, outside the
+ * denominator, and `distribution-drafts/INDEX.md` instructed the reader to set
+ * the version in THAT one.
+ *
+ * It was not a stale copy of the package manifest — it was the PUBLISHED one.
+ * Measured against `registry.modelcontextprotocol.io`: the live `0.7.1` entry
+ * carries `title: "Graneth"`, a `repository` block and `registryBaseUrl`,
+ * fields that existed only in the draft. So the guard was pinning three files a
+ * human never publishes while the document that actually reaches the registry
+ * was versioned by nothing at all — the same shape as a lint scope that walks
+ * the wrong tree, one directory over.
+ *
+ * The draft is deleted and its fields merged here. This test is the obligation
+ * that keeps it deleted: a prohibition in prose ("don't make a second copy") is
+ * the half of a guard nothing checks.
+ */
+describe("there is exactly one MCP registry manifest in this repository", () => {
+  const REPO_ROOT = path.resolve(PKG_DIR, "..", "..");
+  const SKIP = new Set(["node_modules", ".git", "dist", "dist-public", "build", "coverage", ".next", "test-results", "playwright-report"]);
+
+  const manifests: string[] = [];
+  const walk = (dir: string): void => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (!SKIP.has(e.name)) walk(path.join(dir, e.name));
+        continue;
+      }
+      if (e.name !== "server.json") continue;
+      const full = path.join(dir, e.name);
+      let doc: unknown;
+      try {
+        doc = JSON.parse(fs.readFileSync(full, "utf8"));
+      } catch {
+        continue; // not parseable — not a manifest claim
+      }
+      // Identified by what it IS, not by where it sits: any file naming the MCP
+      // registry schema is a manifest, wherever somebody puts it.
+      const schema = (doc as { $schema?: unknown }).$schema;
+      if (typeof schema === "string" && schema.includes("modelcontextprotocol.io")) {
+        manifests.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
+      }
+    }
+  };
+  walk(REPO_ROOT);
+
+  it("finds it, and finds only it", () => {
+    expect(
+      manifests.sort(),
+      "more than one file claims the MCP registry schema. The registry takes ONE document; " +
+        "a second copy is the one that goes stale, and last time it was the second copy that " +
+        "was actually published while the guarded one sat a minor version behind.",
+    ).toEqual(["packages/mcp-server/server.json"]);
+  });
+
+  it("the walk actually reaches files — the assertion is not vacuous", () => {
+    // A traversal that silently found nothing would pass the test above by
+    // returning [] against a one-element expectation… which fails. But a bug
+    // that skipped the package dir AND relaxed the expectation would not, so
+    // the reach is asserted on its own.
+    expect(fs.existsSync(path.join(PKG_DIR, "server.json"))).toBe(true);
+    expect(manifests.length).toBeGreaterThan(0);
+  });
+});

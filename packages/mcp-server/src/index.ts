@@ -31,7 +31,7 @@ import { createServer, InvalidParams, ErrorCode, type Tool } from "./protocol.js
 import { preFlightCheck, type FileInput } from "../../core-checks/src/index.js";
 import type { CoreFinding } from "../../core-checks/src/types.js";
 
-const VERSION = "0.7.1"; // zero-dependency transport (hand-rolled MCP core, no SDK/zod)
+const VERSION = "0.7.2"; // zero-dependency transport (hand-rolled MCP core, no SDK/zod)
 
 // ─── small inline validators (replacing zod; throw InvalidParams on bad input) ─
 

@@ -1,6 +1,6 @@
 {
   "name": "@graneth/mcp-server",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "mcpName": "com.graneth/mcp-server",
   "description": "Account-free MCP server: catch AI-hallucinated packages (npm, PyPI, crates.io, RubyGems, Go, Packagist), risk-score the dependencies an AI agent introduces, and find hardcoded secrets before you commit. Exposes the free pre_flight_check tool over stdio.",
   "type": "module",

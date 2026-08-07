@@ -47,6 +47,32 @@ export interface PreFlightResult {
 export const TEST_FIXTURE_PATH_RE =
   /(^|[\\/])(__tests__|__mocks__|fixtures?|testdata|tests?)[\\/]|\.(test|spec)\.[^\\/]+$|(^|[\\/])test_[^\\/]*\.py$|_test\.py$|(^|[\\/])conftest\.py$/i;
 
+/**
+ * GENERATED OR VENDORED ARTIFACTS — code a machine emitted or a third party
+ * wrote, checked into the repository.
+ *
+ * WARNING: THIS EXISTS BECAUSE A CRITICAL HERE AUTO-REJECTS A LEGITIMATE PULL
+ * REQUEST, measured by `pnpm health:precision-sweep` on 2026-08-06: over 26
+ * upstream repositories and 73 PRs it produced exactly two false-positive
+ * criticals, both in `vercel/next.js` →
+ * `packages/next/src/compiled/sass-loader/cjs.js:2` — an `eval()` and a
+ * "user input flows to a file system sink" inside a vendored, minified bundle.
+ * Nobody wrote that line in that PR; a bundler emitted it.
+ *
+ * Same treatment as the test-fixture class above: findings are **downgraded to
+ * warnings, never dropped**. A secret genuinely committed into `dist/` is still
+ * a leak worth surfacing, and going quiet would trade a false positive for a
+ * false negative — the wrong direction for this product, whose contract is that
+ * a check unable to speak confidently says so.
+ *
+ * Every entry must be a PATH SEGMENT (or a filename suffix). `compiled` and
+ * `dist` as bare substrings would swallow `compiledTemplates.ts` and
+ * `distance.ts`, which are ordinary source, and that hole is exactly the
+ * false-negative direction this comment just refused.
+ */
+export const GENERATED_ARTIFACT_PATH_RE =
+  /(^|[\\/])(compiled|dist|build|vendor|vendored|third_party|node_modules)[\\/]|\.min\.(js|css)$|\.bundle\.js$/i;
+
 /** Known secret patterns on one line (no entropy required — high-precision regexes). */
 function knownPatternFindingsForLine(content: string, path: string, lineNo: number): CoreFinding[] {
   const findings: CoreFinding[] = [];
@@ -290,29 +316,109 @@ async function scanPackages(files: FileInput[]): Promise<CoreFinding[]> {
 }
 
 /**
- * One authoritative CRITICAL for a name on the bundled threat-feed snapshot,
- * or null when the name is unlisted. Two message variants: still-unregistered,
- * and the slopsquatting end-game — the name has SINCE been registered, which is
- * exactly the window a live existence check cannot see.
+ * One finding for a name on the bundled threat-feed snapshot, or null when the
+ * name is unlisted. THREE states, because two were not enough.
+ *
+ * ── THE DEFECT THIS REPLACES ────────────────────────────────────────────────
+ * `registeredSince` used to be `!signal.unreachable && signal.exists` — "the
+ * package exists today" — and from that alone this function told the user the
+ * package "was registered AFTER the name was catalogued", that this is "the
+ * slopsquatting end-game: an attacker registering a name AI models keep
+ * inventing", at CRITICAL, with "treat the registered package as hostile".
+ *
+ * Existing today does not mean registered since. Measured against npm and PyPI
+ * on 2026-08-04, of the 35 names in this snapshot 19 are absent and **all 16
+ * that exist were first published BEFORE the date we recorded the name** —
+ * `react-gpt` in 2015, `express-ai` in 2016, `django-ai` in 2017. Not one was
+ * taken by a squatter afterwards. So every firing of the "registered since"
+ * branch was a hostility claim about somebody's real package, shipped in a free
+ * tool that anyone can run, naming projects with identifiable authors.
+ *
+ * The snapshot now carries `recorded`, so the comparison the sentence always
+ * implied can actually be made:
+ *
+ *   exists AND first published AFTER recorded  → the squat. Critical, and the
+ *                                                one case the wording was
+ *                                                written for.
+ *   exists AND published at/before recorded    → a REAL package that models
+ *   (or the date is unknown)                     also invent. Worth saying —
+ *                                                the model may have meant
+ *                                                something else — but there is
+ *                                                nothing hostile here and we do
+ *                                                not imply there is.
+ *   absent                                     → the classic ghost. Critical.
+ *
+ * The unknown-date case sits with the harmless one deliberately. That is not
+ * the fail-safe contract weakened: fail-safe forbids reporting a check that
+ * could not run as CLEAN, and the existence check still runs and still reports.
+ * What an unknown date may not do is support an accusation against a third
+ * party.
  */
+/**
+ * How the row got onto the list, in words the tier can actually support.
+ *
+ * The tier is quoted straight into the finding, so it is a public sentence
+ * rather than an internal label. `pattern` rows are Graneth's own
+ * constructions: the name may well be one a model produces — that is the
+ * premise of the pattern — but nobody has reported it, and saying "a name AI
+ * models are known to invent" about a name we wrote ourselves is the claim this
+ * clause exists to prevent.
+ */
+function provenanceClause(tier: string): string {
+  switch (tier) {
+    case "reported":
+      return "a name outside research reports generative assistants suggest — see https://graneth.com/api/threat-feed for the source and its link";
+    case "observed":
+      return "a name Graneth has seen an assistant produce";
+    case "community":
+      return "a name a user reported, verified absent from the registry at report time";
+    default:
+      return 'a name Graneth built from the documented "popular library + generic AI suffix" pattern — our own construction, not a name anyone has reported';
+  }
+}
+
 function knownHallucinationFinding(ref: PackageRef, signal: RegistryResult, registryName: string): CoreFinding | null {
   const known = knownHallucination(ref.pkg, ref.ecosystem);
   if (!known) return null;
-  const registeredSince = !signal.unreachable && signal.exists;
+
+  const exists = !signal.unreachable && signal.exists;
+  const firstPublished = signal.publishedAt ? signal.publishedAt.toISOString().slice(0, 10) : null;
+  const registeredSince = exists && !!known.recorded && !!firstPublished && firstPublished > known.recorded;
+
+  if (registeredSince) {
+    return {
+      type: "known_hallucination",
+      severity: "critical",
+      title: `"${ref.pkg}" is a known hallucinated name — and has SINCE BEEN REGISTERED`,
+      description: `"${ref.pkg}" is in Graneth's public threat feed (${known.tier} tier) — ${provenanceClause(known.tier)} — recorded ${known.recorded}, and the ${registryName} package now under it was registered afterwards, first published ${firstPublished}. That is the slopsquatting end-game: somebody registered the name after it was catalogued as one an assistant produces. An existence check alone would stay silent here. Found in \`${ref.filename}\` at line ${ref.line}.`,
+      file: ref.filename,
+      line: ref.line,
+      recommendation: `Do NOT install "${ref.pkg}" under any circumstances — treat the registered package as hostile until proven otherwise. Find the package you actually intended and replace the reference.`,
+      cve: "CWE-1357",
+    };
+  }
+
+  if (exists) {
+    return {
+      type: "known_hallucination",
+      severity: "warning",
+      title: `"${ref.pkg}" is on Graneth's hallucinated-name list — and a real ${registryName} package by that name exists`,
+      description: `"${ref.pkg}" is in Graneth's public threat feed (${known.tier} tier): ${provenanceClause(known.tier)}. A real ${registryName} package exists under it${firstPublished ? `, first published ${firstPublished}` : ""}${known.recorded && firstPublished ? ` — before we recorded the name (${known.recorded}), so this is not a squat and nothing here is a judgement on that package or its author` : " — we could not establish when it was first published, so we make no claim about it"}. Check that it is the package you actually meant, not one your assistant reached for because the name sounded right. Found in \`${ref.filename}\` at line ${ref.line}.`,
+      file: ref.filename,
+      line: ref.line,
+      recommendation: `Confirm "${ref.pkg}" is the library you intended before installing it. The full feed: https://graneth.com/api/threat-feed`,
+      cve: "CWE-1357",
+    };
+  }
+
   return {
     type: "known_hallucination",
     severity: "critical",
-    title: registeredSince
-      ? `"${ref.pkg}" is a known hallucinated name — and has SINCE BEEN REGISTERED`
-      : `"${ref.pkg}" is a known AI-hallucinated package name`,
-    description: registeredSince
-      ? `"${ref.pkg}" is in Graneth's public threat feed (${known.tier} tier) as an AI-hallucinated name — and the ${registryName} package that now exists under it was registered AFTER the name was catalogued. That is the slopsquatting end-game: an attacker registering a name AI models keep inventing. An existence check alone would stay silent here. Found in \`${ref.filename}\` at line ${ref.line}.`
-      : `"${ref.pkg}" is in Graneth's public threat feed (${known.tier} tier): a name AI models are known to invent. It does not exist on ${registryName} today, but hallucinated names get pre-registered by attackers. Found in \`${ref.filename}\` at line ${ref.line}.`,
+    title: `"${ref.pkg}" is on Graneth's hallucinated-name list and does not exist`,
+    description: `"${ref.pkg}" is in Graneth's public threat feed (${known.tier} tier): ${provenanceClause(known.tier)}. It does not exist on ${registryName} today, but hallucinated names get pre-registered by attackers. Found in \`${ref.filename}\` at line ${ref.line}.`,
     file: ref.filename,
     line: ref.line,
-    recommendation: registeredSince
-      ? `Do NOT install "${ref.pkg}" under any circumstances — treat the registered package as hostile until proven otherwise. Find the package you actually intended and replace the reference.`
-      : `Remove the reference to "${ref.pkg}" and use the package you actually intended. The full feed: https://graneth.com/api/threat-feed`,
+    recommendation: `Remove the reference to "${ref.pkg}" and use the package you actually intended. The full feed: https://graneth.com/api/threat-feed`,
     cve: "CWE-1357",
   };
 }
