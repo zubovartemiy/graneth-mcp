@@ -21,6 +21,7 @@
  */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,29 +34,36 @@ const manifestVersion = (): string => JSON.parse(read("package.json")).version;
 const reportedVersion = (): string => {
   const src = read("src/index.ts");
   const m = /const VERSION = "([^"]+)"/.exec(src);
-  if (!m) throw new Error("src/index.ts no longer declares `const VERSION = \"…\"` — update this guard, do not delete it");
+  if (!m)
+    throw new Error(
+      'src/index.ts no longer declares `const VERSION = "…"` — update this guard, do not delete it'
+    );
   return m[1];
 };
 
 /** Both places the registry manifest states a version. */
 const registryVersions = (): string[] => {
-  const doc = JSON.parse(read("server.json")) as { version: string; packages: Array<{ version: string }> };
-  return [doc.version, ...doc.packages.map((p) => p.version)];
+  const doc = JSON.parse(read("server.json")) as {
+    version: string;
+    packages: Array<{ version: string }>;
+  };
+  return [doc.version, ...doc.packages.map(p => p.version)];
 };
 
 describe("every place that states this package's version agrees", () => {
   it("the server reports the version npm installed", () => {
     expect(
       reportedVersion(),
-      "a client would be told a version different from the one it installed",
+      "a client would be told a version different from the one it installed"
     ).toBe(manifestVersion());
   });
 
   it("the registry manifest states the same version, in every field", () => {
     for (const v of registryVersions()) {
-      expect(v, "server.json describes a different release than package.json — and it is PUBLIC").toBe(
-        manifestVersion(),
-      );
+      expect(
+        v,
+        "server.json describes a different release than package.json — and it is PUBLIC"
+      ).toBe(manifestVersion());
     }
   });
 
@@ -87,39 +95,56 @@ describe("every place that states this package's version agrees", () => {
  */
 describe("there is exactly one MCP registry manifest in this repository", () => {
   const REPO_ROOT = path.resolve(PKG_DIR, "..", "..");
-  const SKIP = new Set(["node_modules", ".git", "dist", "dist-public", "build", "coverage", ".next", "test-results", "playwright-report"]);
+  // Generated and tool-owned directories. `.stryker-tmp` earns its place the
+  // hard way: Stryker copies the whole repository into a sandbox there while it
+  // runs, so this suite found a SECOND server.json and failed — correctly by its
+  // own rule, and about nothing. A guard that passes or fails depending on
+  // whether another tool happens to be running at the same moment is worse than
+  // no guard, because the false alarm is indistinguishable from the real one it
+  // exists to raise.
 
-  const manifests: string[] = [];
-  const walk = (dir: string): void => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory()) {
-        if (!SKIP.has(e.name)) walk(path.join(dir, e.name));
-        continue;
-      }
-      if (e.name !== "server.json") continue;
-      const full = path.join(dir, e.name);
+  /**
+   * TRACKED FILES ONLY.
+   *
+   * This walked the disk, so a gitignored directory could fail it — and one did:
+   * a leftover `git worktree` under `.claude/worktrees/` held a second copy of
+   * the manifest and turned this guard red over a file that is not part of the
+   * repository at all. The question it exists to ask is "does the REPOSITORY
+   * ship two manifests", and `git ls-files` is what answers that. The same
+   * correction publishedIdentity.test.ts needed, for the same reason: enumerate
+   * the right set, or the check reports on something nobody asked about.
+   */
+  const manifests: string[] = execFileSync(
+    "git",
+    ["ls-files", "*server.json"],
+    {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    }
+  )
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .filter(rel => {
       let doc: unknown;
       try {
-        doc = JSON.parse(fs.readFileSync(full, "utf8"));
+        doc = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"));
       } catch {
-        continue; // not parseable — not a manifest claim
+        return false; // not parseable — not a manifest claim
       }
       // Identified by what it IS, not by where it sits: any file naming the MCP
       // registry schema is a manifest, wherever somebody puts it.
       const schema = (doc as { $schema?: unknown }).$schema;
-      if (typeof schema === "string" && schema.includes("modelcontextprotocol.io")) {
-        manifests.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
-      }
-    }
-  };
-  walk(REPO_ROOT);
+      return (
+        typeof schema === "string" && schema.includes("modelcontextprotocol.io")
+      );
+    });
 
   it("finds it, and finds only it", () => {
     expect(
       manifests.sort(),
       "more than one file claims the MCP registry schema. The registry takes ONE document; " +
         "a second copy is the one that goes stale, and last time it was the second copy that " +
-        "was actually published while the guarded one sat a minor version behind.",
+        "was actually published while the guarded one sat a minor version behind."
     ).toEqual(["packages/mcp-server/server.json"]);
   });
 

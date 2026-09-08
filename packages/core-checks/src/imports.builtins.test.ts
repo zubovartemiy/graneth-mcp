@@ -16,14 +16,35 @@ describe("Node builtin recognition (drift guard)", () => {
   it("recognises every builtin Node itself reports", () => {
     // Node lists a few deprecated/internal aliases that are not import targets
     // in practice; everything else must be covered by the inlined set.
-    const ignored = new Set(["_http_agent", "_http_client", "_http_common", "_http_incoming",
-      "_http_outgoing", "_http_server", "_stream_duplex", "_stream_passthrough", "_stream_readable",
-      "_stream_transform", "_stream_wrap", "_stream_writable", "_tls_common", "_tls_wrap",
-      "freelist", "node:sea", "node:sqlite", "node:test", "node:test/reporters", "wasi"]);
+    const ignored = new Set([
+      "_http_agent",
+      "_http_client",
+      "_http_common",
+      "_http_incoming",
+      "_http_outgoing",
+      "_http_server",
+      "_stream_duplex",
+      "_stream_passthrough",
+      "_stream_readable",
+      "_stream_transform",
+      "_stream_wrap",
+      "_stream_writable",
+      "_tls_common",
+      "_tls_wrap",
+      "freelist",
+      "node:sea",
+      "node:sqlite",
+      "node:test",
+      "node:test/reporters",
+      "wasi",
+    ]);
     const missing = builtinModules
       .filter(m => !ignored.has(m) && !m.startsWith("internal/"))
       .filter(m => !isNodeBuiltin(m));
-    expect(missing, `inlined NODE_BUILTINS is missing: ${missing.join(", ")}`).toEqual([]);
+    expect(
+      missing,
+      `inlined NODE_BUILTINS is missing: ${missing.join(", ")}`
+    ).toEqual([]);
   });
 
   it("treats the node: protocol form as a builtin regardless of the list", () => {
@@ -33,10 +54,15 @@ describe("Node builtin recognition (drift guard)", () => {
 
   it("never lets a builtin reach the registry, and still resolves real packages", () => {
     for (const b of ["fs", "fs/promises", "node:crypto", "path"]) {
-      expect(isResolvableNpmName(b), `${b} must not be treated as an npm name`).toBe(false);
+      expect(
+        isResolvableNpmName(b),
+        `${b} must not be treated as an npm name`
+      ).toBe(false);
     }
     for (const pkg of ["express", "@scope/pkg", "left-pad"]) {
-      expect(isResolvableNpmName(pkg), `${pkg} must stay resolvable`).toBe(true);
+      expect(isResolvableNpmName(pkg), `${pkg} must stay resolvable`).toBe(
+        true
+      );
     }
   });
 });

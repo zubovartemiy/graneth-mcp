@@ -37,6 +37,7 @@
     "supply-chain"
   ],
   "license": "MIT",
+  "author": "ZVM COMPANY, spol. s r.o.",
   "scripts": {
     "build": "tsup",
     "start": "node dist/index.js",

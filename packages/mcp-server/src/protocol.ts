@@ -64,7 +64,11 @@ export interface Tool<T> {
 interface JsonRpcId {
   id?: string | number | null;
 }
-type JsonRpcRequest = JsonRpcId & { jsonrpc?: string; method?: unknown; params?: any };
+type JsonRpcRequest = JsonRpcId & {
+  jsonrpc?: string;
+  method?: unknown;
+  params?: any;
+};
 
 interface ServerOptions {
   name: string;
@@ -80,7 +84,7 @@ function fail(id: string | number | null, code: number, message: string) {
 }
 
 export function createServer(opts: ServerOptions) {
-  const byName = new Map(opts.tools.map((t) => [t.name, t]));
+  const byName = new Map(opts.tools.map(t => [t.name, t]));
 
   async function callTool(id: string | number | null, params: any) {
     const name = params?.name;
@@ -92,7 +96,10 @@ export function createServer(opts: ServerOptions) {
     try {
       input = tool.parse(params?.arguments);
     } catch (err) {
-      const message = err instanceof InvalidParams ? err.message : `Invalid arguments: ${String(err)}`;
+      const message =
+        err instanceof InvalidParams
+          ? err.message
+          : `Invalid arguments: ${String(err)}`;
       return fail(id, ErrorCode.InvalidParams, message);
     }
     try {
@@ -102,7 +109,11 @@ export function createServer(opts: ServerOptions) {
       // The tool contract already turns expected failures into an isError
       // ToolResult; reaching here means an unexpected throw. Never leak it as an
       // unhandled rejection — surface it as a JSON-RPC InternalError.
-      return fail(id, ErrorCode.InternalError, `Tool "${tool.name}" failed: ${String(err)}`);
+      return fail(
+        id,
+        ErrorCode.InternalError,
+        `Tool "${tool.name}" failed: ${String(err)}`
+      );
     }
   }
 
@@ -111,6 +122,29 @@ export function createServer(opts: ServerOptions) {
    * when the message is a notification that takes no reply.
    */
   async function handleMessage(msg: unknown): Promise<object | null> {
+    // ── A BATCH IS AN ARRAY, AND AN ARRAY HAS NO `method` ─────────────────────
+    //
+    // Without this, the whole batch fell into the "Missing or invalid `method`"
+    // branch below and produced ONE error with `id: null` — uncorrelatable to
+    // anything the client sent, while every id inside it went unanswered and
+    // the client blocked on each until its own timeout. `2025-03-26` is in
+    // SUPPORTED_PROTOCOL_VERSIONS above and the initialize handler echoes it
+    // back, so this server told clients it speaks the revision that introduced
+    // batching. A host that batches its start-up calls saw the server fail to
+    // come up rather than degrade.
+    //
+    // An all-notification batch returns null and, per JSON-RPC 2.0, is answered
+    // with nothing at all — which the caller's `response !== null` guard
+    // already does.
+    if (Array.isArray(msg)) {
+      if (msg.length === 0)
+        return fail(null, ErrorCode.InvalidRequest, "Empty batch");
+      const replies = (await Promise.all(msg.map(handleMessage))).filter(
+        r => r !== null
+      );
+      return replies.length ? (replies as unknown as object) : null;
+    }
+
     const req = (msg ?? {}) as JsonRpcRequest;
     const id = req.id ?? null;
     const method = req.method;
@@ -138,7 +172,7 @@ export function createServer(opts: ServerOptions) {
         return ok(id, {});
       case "tools/list":
         return ok(id, {
-          tools: opts.tools.map((t) => ({
+          tools: opts.tools.map(t => ({
             name: t.name,
             description: t.description,
             inputSchema: t.inputSchema,
@@ -147,7 +181,11 @@ export function createServer(opts: ServerOptions) {
       case "tools/call":
         return callTool(id, req.params);
       default:
-        return fail(id, ErrorCode.MethodNotFound, `Method not found: ${method}`);
+        return fail(
+          id,
+          ErrorCode.MethodNotFound,
+          `Method not found: ${method}`
+        );
     }
   }
 

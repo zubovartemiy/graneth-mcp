@@ -19,8 +19,13 @@ import { computeDependencyRisk, isStackedRisk } from "./riskScore.js";
  * next person: `!` says "the checker is wrong", this says "null here is a
  * regression in the thing under test".
  */
-function scored(r: ReturnType<typeof computeDependencyRisk>): NonNullable<typeof r> {
-  expect(r, "expected a score — null means existence could not be established").not.toBeNull();
+function scored(
+  r: ReturnType<typeof computeDependencyRisk>
+): NonNullable<typeof r> {
+  expect(
+    r,
+    "expected a score — null means existence could not be established"
+  ).not.toBeNull();
   return r as NonNullable<typeof r>;
 }
 
@@ -29,7 +34,7 @@ describe("computeDependencyRisk", () => {
     const r = scored(computeDependencyRisk({ exists: false }));
     expect(r.score).toBe(100);
     expect(r.band).toBe("critical");
-    expect(r.factors.some((f) => /does not exist/i.test(f.note))).toBe(true);
+    expect(r.factors.some(f => /does not exist/i.test(f.note))).toBe(true);
   });
 
   it("existence UNKNOWN (registry unreachable) is not scored as safe — returns null", () => {
@@ -39,8 +44,12 @@ describe("computeDependencyRisk", () => {
 
   it("a real, popular, provenance-backed package is minimal risk (no false alarm)", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: false, weeklyDownloads: 5_000_000,
-      hasRepository: true, hasProvenance: true, maintainersCount: 1,
+      exists: true,
+      isNewPackage: false,
+      weeklyDownloads: 5_000_000,
+      hasRepository: true,
+      hasProvenance: true,
+      maintainersCount: 1,
     })!;
     expect(r.band).toBe("minimal");
     expect(r.score).toBeLessThan(25);
@@ -48,8 +57,12 @@ describe("computeDependencyRisk", () => {
 
   it("an established modest package (repo + old + real adoption) is minimal — no FP on the long tail", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: false, weeklyDownloads: 20_000,
-      hasRepository: true, hasProvenance: false, maintainersCount: 2,
+      exists: true,
+      isNewPackage: false,
+      weeklyDownloads: 20_000,
+      hasRepository: true,
+      hasProvenance: false,
+      maintainersCount: 2,
     })!;
     expect(r.band).toBe("minimal");
   });
@@ -58,8 +71,12 @@ describe("computeDependencyRisk", () => {
     // none of these alone trips a critical today — but together they are the
     // shape of a patient squat / malicious low-adoption package.
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: true, ageDays: 12,
-      weeklyDownloads: 30, hasRepository: false, hasProvenance: false,
+      exists: true,
+      isNewPackage: true,
+      ageDays: 12,
+      weeklyDownloads: 30,
+      hasRepository: false,
+      hasProvenance: false,
       maintainersCount: 1,
     })!;
     expect(r.score).toBeGreaterThanOrEqual(50);
@@ -70,36 +87,66 @@ describe("computeDependencyRisk", () => {
 
   it("the npm dropper shape (new + install scripts + low adoption) is high", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: true, hasInstallScripts: true, weeklyDownloads: 5,
+      exists: true,
+      isNewPackage: true,
+      hasInstallScripts: true,
+      weeklyDownloads: 5,
     })!;
     expect(r.score).toBeGreaterThanOrEqual(50);
-    expect(r.factors.some((f) => /install script/i.test(f.note))).toBe(true);
+    expect(r.factors.some(f => /install script/i.test(f.note))).toBe(true);
   });
 
   it("install scripts on an established high-adoption package do NOT dominate (esbuild-shape)", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: false, hasInstallScripts: true,
-      weeklyDownloads: 30_000_000, hasRepository: true, hasProvenance: true,
+      exists: true,
+      isNewPackage: false,
+      hasInstallScripts: true,
+      weeklyDownloads: 30_000_000,
+      hasRepository: true,
+      hasProvenance: true,
     })!;
     expect(r.band).toBe("minimal");
   });
 
   it("a 1-edit typosquat neighbour is high even if it technically exists", () => {
-    const r = computeDependencyRisk({ exists: true, typosquatDistance: 1, weeklyDownloads: 40 })!;
+    const r = computeDependencyRisk({
+      exists: true,
+      typosquatDistance: 1,
+      weeklyDownloads: 40,
+    })!;
     expect(r.score).toBeGreaterThanOrEqual(50);
   });
 
   it("provenance attestation is a real mitigator (lifts an otherwise-elevated package down)", () => {
-    const without = computeDependencyRisk({ exists: true, isNewPackage: false, weeklyDownloads: 200, hasRepository: false, hasProvenance: false })!;
-    const withProv = computeDependencyRisk({ exists: true, isNewPackage: false, weeklyDownloads: 200, hasRepository: false, hasProvenance: true })!;
+    const without = computeDependencyRisk({
+      exists: true,
+      isNewPackage: false,
+      weeklyDownloads: 200,
+      hasRepository: false,
+      hasProvenance: false,
+    })!;
+    const withProv = computeDependencyRisk({
+      exists: true,
+      isNewPackage: false,
+      weeklyDownloads: 200,
+      hasRepository: false,
+      hasProvenance: true,
+    })!;
     expect(withProv.score).toBeLessThan(without.score);
   });
 
   it("score is always clamped to 0..100 and band matches", () => {
     const r = computeDependencyRisk({
-      exists: true, isSecurityHolding: true, knownHallucination: true,
-      typosquatDistance: 1, isNewPackage: true, hasInstallScripts: true,
-      weeklyDownloads: 0, hasRepository: false, isDeprecated: true, maintainersCount: 1,
+      exists: true,
+      isSecurityHolding: true,
+      knownHallucination: true,
+      typosquatDistance: 1,
+      isNewPackage: true,
+      hasInstallScripts: true,
+      weeklyDownloads: 0,
+      hasRepository: false,
+      isDeprecated: true,
+      maintainersCount: 1,
     })!;
     expect(r.score).toBeLessThanOrEqual(100);
     expect(r.score).toBeGreaterThanOrEqual(0);
@@ -108,8 +155,11 @@ describe("computeDependencyRisk", () => {
 
   it("a deprecated but popular package is at most elevated — deprecation alone is not a panic", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: false, isDeprecated: true,
-      weeklyDownloads: 2_000_000, hasRepository: true,
+      exists: true,
+      isNewPackage: false,
+      isDeprecated: true,
+      weeklyDownloads: 2_000_000,
+      hasRepository: true,
     })!;
     expect(["minimal", "elevated"]).toContain(r.band);
   });
@@ -118,8 +168,11 @@ describe("computeDependencyRisk", () => {
 describe("isStackedRisk — isolates the compounding shape from single dominant signals", () => {
   it("true for a genuine stack (no single signal reaches the high threshold)", () => {
     const r = computeDependencyRisk({
-      exists: true, isNewPackage: true, weeklyDownloads: 30,
-      hasRepository: false, maintainersCount: 1,
+      exists: true,
+      isNewPackage: true,
+      weeklyDownloads: 30,
+      hasRepository: false,
+      maintainersCount: 1,
     });
     expect(isStackedRisk(r)).toBe(true);
   });
@@ -140,6 +193,15 @@ describe("isStackedRisk — isolates the compounding shape from single dominant 
   });
 
   it("false for minimal/elevated bands", () => {
-    expect(isStackedRisk(computeDependencyRisk({ exists: true, isDeprecated: true, weeklyDownloads: 500, hasRepository: false }))).toBe(false);
+    expect(
+      isStackedRisk(
+        computeDependencyRisk({
+          exists: true,
+          isDeprecated: true,
+          weeklyDownloads: 500,
+          hasRepository: false,
+        })
+      )
+    ).toBe(false);
   });
 });

@@ -86,35 +86,116 @@ type Add = (signal: string, points: number, note: string) => void;
 /** Strong shapes — each usually already emits its own finding; they also feed
  *  the composite so a stack that includes one still lands correctly. */
 function applyDominantSignals(s: RiskSignals, add: Add): void {
-  if (s.isSecurityHolding) add("security_holding", 70, "Registry seized this name after a malware/typosquat incident.");
-  if (s.knownHallucination) add("known_hallucination", 45, "Name appears in the known-AI-hallucination corpus and has since been registered (slopsquat).");
-  if (s.typosquatDistance === 1) add("typosquat_1", 55, "One edit away from a hugely popular package name (typosquat shape).");
-  else if (s.typosquatDistance === 2) add("typosquat_2", 35, "Two edits away from a popular package name (possible typosquat).");
+  if (s.isSecurityHolding)
+    add(
+      "security_holding",
+      70,
+      "Registry seized this name after a malware/typosquat incident."
+    );
+  if (s.knownHallucination)
+    add(
+      "known_hallucination",
+      45,
+      "Name appears in the known-AI-hallucination corpus and has since been registered (slopsquat)."
+    );
+  if (s.typosquatDistance === 1)
+    add(
+      "typosquat_1",
+      55,
+      "One edit away from a hugely popular package name (typosquat shape)."
+    );
+  else if (s.typosquatDistance === 2)
+    add(
+      "typosquat_2",
+      35,
+      "Two edits away from a popular package name (possible typosquat)."
+    );
 }
 
 /** The compounding weak signals — this is the stack-catch. */
-function applyCompoundingSignals(s: RiskSignals, add: Add, newPkg: boolean, dl: number | null | undefined): void {
+function applyCompoundingSignals(
+  s: RiskSignals,
+  add: Add,
+  newPkg: boolean,
+  dl: number | null | undefined
+): void {
   const lowAdoption = dl != null && dl < LOW_ADOPTION;
   const veryLowAdoption = dl != null && dl < VERY_LOW_ADOPTION;
-  if (newPkg) add("new_package", 22, "Published within the last 30 days — the pre-registration attack window.");
+  if (newPkg)
+    add(
+      "new_package",
+      22,
+      "Published within the last 30 days — the pre-registration attack window."
+    );
   if (s.hasInstallScripts) {
-    if (newPkg || lowAdoption) add("install_script_risk", 30, "Runs an install script AND is new / near-zero adoption — the npm dropper shape.");
-    else add("install_script", 5, "Runs an install script (common for native builds; low risk on an established package).");
+    if (newPkg || lowAdoption)
+      add(
+        "install_script_risk",
+        30,
+        "Runs an install script AND is new / near-zero adoption — the npm dropper shape."
+      );
+    else
+      add(
+        "install_script",
+        5,
+        "Runs an install script (common for native builds; low risk on an established package)."
+      );
   }
-  if (s.isDeprecated) add("deprecated", 15, "Deprecated by its maintainer — unpatched and a name-takeover target.");
-  if (veryLowAdoption) add("very_low_adoption", 28, "Near-zero adoption — no crowd has vetted this dependency.");
+  if (s.isDeprecated)
+    add(
+      "deprecated",
+      15,
+      "Deprecated by its maintainer — unpatched and a name-takeover target."
+    );
+  if (veryLowAdoption)
+    add(
+      "very_low_adoption",
+      28,
+      "Near-zero adoption — no crowd has vetted this dependency."
+    );
   else if (lowAdoption) add("low_adoption", 15, "Low adoption for its age.");
-  if (s.hasRepository === false) add("no_repository", 12, "No linked source repository to inspect.");
-  if (s.maintainersCount === 1) add("single_maintainer", 8, "Single maintainer — one account compromise ships to every consumer.");
+  if (s.hasRepository === false)
+    add("no_repository", 12, "No linked source repository to inspect.");
+  if (s.maintainersCount === 1)
+    add(
+      "single_maintainer",
+      8,
+      "Single maintainer — one account compromise ships to every consumer."
+    );
 }
 
 /** Mitigators — keep the modest-but-real long tail out of the alarm. */
-function applyMitigators(s: RiskSignals, add: Add, newPkg: boolean, dl: number | null | undefined): void {
-  if (s.hasProvenance) add("provenance", -25, "Registry-verified build provenance (public CI from a public repo) — strong legitimacy.");
-  if (dl != null && dl > VERY_HIGH_ADOPTION) add("very_high_adoption", -50, "Very high adoption — extensively used and watched.");
-  else if (dl != null && dl > HIGH_ADOPTION) add("high_adoption", -35, "High adoption — widely used.");
-  if (!newPkg && s.hasRepository === true && dl != null && dl >= ESTABLISHED_ADOPTION) {
-    add("established", -15, "Established: aged, repo-backed, with real adoption.");
+function applyMitigators(
+  s: RiskSignals,
+  add: Add,
+  newPkg: boolean,
+  dl: number | null | undefined
+): void {
+  if (s.hasProvenance)
+    add(
+      "provenance",
+      -25,
+      "Registry-verified build provenance (public CI from a public repo) — strong legitimacy."
+    );
+  if (dl != null && dl > VERY_HIGH_ADOPTION)
+    add(
+      "very_high_adoption",
+      -50,
+      "Very high adoption — extensively used and watched."
+    );
+  else if (dl != null && dl > HIGH_ADOPTION)
+    add("high_adoption", -35, "High adoption — widely used.");
+  if (
+    !newPkg &&
+    s.hasRepository === true &&
+    dl != null &&
+    dl >= ESTABLISHED_ADOPTION
+  ) {
+    add(
+      "established",
+      -15,
+      "Established: aged, repo-backed, with real adoption."
+    );
   }
 }
 
@@ -131,12 +212,20 @@ export function computeDependencyRisk(s: RiskSignals): DependencyRisk | null {
     return {
       score: 100,
       band: "critical",
-      factors: [{ signal: "nonexistent", points: 100, note: "Package does not exist in its registry (AI-hallucinated / ghost)." }],
+      factors: [
+        {
+          signal: "nonexistent",
+          points: 100,
+          note: "Package does not exist in its registry (AI-hallucinated / ghost).",
+        },
+      ],
     };
   }
 
   const factors: RiskFactor[] = [];
-  const add: Add = (signal, points, note) => { factors.push({ signal, points, note }); };
+  const add: Add = (signal, points, note) => {
+    factors.push({ signal, points, note });
+  };
   const newPkg = isNew(s);
   const dl = s.weeklyDownloads;
 
@@ -158,6 +247,9 @@ export function computeDependencyRisk(s: RiskSignals): DependencyRisk | null {
  */
 export function isStackedRisk(risk: DependencyRisk | null): boolean {
   if (!risk || (risk.band !== "high" && risk.band !== "critical")) return false;
-  const maxPositive = Math.max(0, ...risk.factors.filter((f) => f.points > 0).map((f) => f.points));
+  const maxPositive = Math.max(
+    0,
+    ...risk.factors.filter(f => f.points > 0).map(f => f.points)
+  );
   return maxPositive < 50;
 }

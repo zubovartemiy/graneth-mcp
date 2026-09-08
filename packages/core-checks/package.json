@@ -12,8 +12,15 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "LICENSE"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "license": "MIT",
+  "author": "ZVM COMPANY, spol. s r.o.",
+  "bugs": {
+    "email": "support@graneth.com"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist"

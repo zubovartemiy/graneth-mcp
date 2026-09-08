@@ -18,7 +18,12 @@ export interface InternalNameEvidence {
 
 const TSCONFIG_RE = /^tsconfig[^\\/]*\.json$/i;
 const WORKSPACE_SPEC_RE = /^(?:workspace|file|link|portal):/;
-const DEP_SECTIONS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
+const DEP_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
 
 /**
  * tsconfig is JSONC — strip line/block comments before parsing. String-aware:
@@ -80,7 +85,8 @@ function collectManifestNames(content: string, ev: InternalNameEvidence): void {
       const deps = pkg?.[section];
       if (!deps || typeof deps !== "object") continue;
       for (const [name, spec] of Object.entries(deps)) {
-        if (typeof spec === "string" && WORKSPACE_SPEC_RE.test(spec)) ev.exact.add(name);
+        if (typeof spec === "string" && WORKSPACE_SPEC_RE.test(spec))
+          ev.exact.add(name);
       }
     }
   } catch {
@@ -89,7 +95,9 @@ function collectManifestNames(content: string, ev: InternalNameEvidence): void {
 }
 
 /** Gather internal-name evidence from tsconfig + package.json files in the payload. */
-export function extractInternalNameEvidence(files: FileInput[]): InternalNameEvidence {
+export function extractInternalNameEvidence(
+  files: FileInput[]
+): InternalNameEvidence {
   const ev: InternalNameEvidence = { exact: new Set(), prefixes: [] };
   for (const file of files) {
     const base = file.path.split(/[\\/]/).pop() ?? "";
@@ -100,7 +108,10 @@ export function extractInternalNameEvidence(files: FileInput[]): InternalNameEvi
 }
 
 /** True when the payload proves this import specifier is workspace-internal. */
-export function isInternalName(name: string, ev: InternalNameEvidence): boolean {
+export function isInternalName(
+  name: string,
+  ev: InternalNameEvidence
+): boolean {
   if (ev.exact.has(name)) return true;
-  return ev.prefixes.some((p) => name.startsWith(p) || `${name}/` === p);
+  return ev.prefixes.some(p => name.startsWith(p) || `${name}/` === p);
 }

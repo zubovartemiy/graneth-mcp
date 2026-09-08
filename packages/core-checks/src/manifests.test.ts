@@ -7,7 +7,7 @@
  * common way AI agents add deps) sailed through as CLEAR.
  */
 import { describe, it, expect } from "vitest";
-import { extractManifestPackages } from "./manifests.js";
+import { extractManifestPackages, isComposerPackageName } from "./manifests.js";
 
 function extract(path: string, content: string) {
   return extractManifestPackages([{ path, content }]);
@@ -39,37 +39,59 @@ describe("package.json extraction", () => {
   it("collects registry deps from all four dependency sections", () => {
     const { refs, errors } = extract("package.json", manifest);
     expect(errors).toEqual([]);
-    const names = refs.map((r) => r.pkg).sort();
+    const names = refs.map(r => r.pkg).sort();
     expect(names).toEqual(
-      ["@scope/real", "@scope/thing", "dev-tool", "left-pad", "opt-lib", "peer-lib", "real-target"].sort(),
+      [
+        "@scope/real",
+        "@scope/thing",
+        "dev-tool",
+        "left-pad",
+        "opt-lib",
+        "peer-lib",
+        "real-target",
+      ].sort()
     );
     for (const r of refs) expect(r.ecosystem).toBe("npm");
   });
 
   it("reports the manifest line the dependency is declared on", () => {
     const { refs } = extract("package.json", manifest);
-    expect(refs.find((r) => r.pkg === "left-pad")).toMatchObject({ filename: "package.json", line: 4 });
-    expect(refs.find((r) => r.pkg === "dev-tool")).toMatchObject({ line: 16 });
+    expect(refs.find(r => r.pkg === "left-pad")).toMatchObject({
+      filename: "package.json",
+      line: 4,
+    });
+    expect(refs.find(r => r.pkg === "dev-tool")).toMatchObject({ line: 16 });
   });
 
   it("never sends workspace/file/link/git/github/catalog/URL specifiers to the registry", () => {
     const { refs } = extract("package.json", manifest);
-    const names = refs.map((r) => r.pkg);
-    for (const skipped of ["local-lib", "ws-lib", "cat-lib", "gh-lib", "short-gh", "git-lib", "url-lib"]) {
+    const names = refs.map(r => r.pkg);
+    for (const skipped of [
+      "local-lib",
+      "ws-lib",
+      "cat-lib",
+      "gh-lib",
+      "short-gh",
+      "git-lib",
+      "url-lib",
+    ]) {
       expect(names).not.toContain(skipped);
     }
   });
 
   it("resolves npm: aliases to the real registry target, not the local alias name", () => {
     const { refs } = extract("package.json", manifest);
-    expect(refs.map((r) => r.pkg)).toContain("real-target");
-    expect(refs.map((r) => r.pkg)).toContain("@scope/real");
-    expect(refs.map((r) => r.pkg)).not.toContain("aliased");
-    expect(refs.map((r) => r.pkg)).not.toContain("scoped-alias");
+    expect(refs.map(r => r.pkg)).toContain("real-target");
+    expect(refs.map(r => r.pkg)).toContain("@scope/real");
+    expect(refs.map(r => r.pkg)).not.toContain("aliased");
+    expect(refs.map(r => r.pkg)).not.toContain("scoped-alias");
   });
 
   it("reports a parse error for malformed JSON instead of returning silent-clean", () => {
-    const { refs, errors } = extract("package.json", '{ "dependencies": { oops');
+    const { refs, errors } = extract(
+      "package.json",
+      '{ "dependencies": { oops'
+    );
     expect(refs).toEqual([]);
     expect(errors).toHaveLength(1);
     expect(errors[0].file).toBe("package.json");
@@ -77,13 +99,18 @@ describe("package.json extraction", () => {
   });
 
   it("matches nested manifests but not lockfiles or other JSON", () => {
-    expect(extract("backend/package.json", manifest).refs.length).toBeGreaterThan(0);
+    expect(
+      extract("backend/package.json", manifest).refs.length
+    ).toBeGreaterThan(0);
     expect(extract("package-lock.json", manifest).refs).toEqual([]);
     expect(extract("tsconfig.json", manifest).refs).toEqual([]);
   });
 
   it("tolerates a manifest with no dependency sections", () => {
-    const { refs, errors } = extract("package.json", '{ "name": "x", "version": "1.0.0" }');
+    const { refs, errors } = extract(
+      "package.json",
+      '{ "name": "x", "version": "1.0.0" }'
+    );
     expect(refs).toEqual([]);
     expect(errors).toEqual([]);
   });
@@ -109,24 +136,29 @@ describe("requirements.txt extraction", () => {
   it("parses names, strips versions/extras/markers, normalizes _ and . to -", () => {
     const { refs, errors } = extract("requirements.txt", reqs);
     expect(errors).toEqual([]);
-    expect(refs.map((r) => r.pkg).sort()).toEqual(
-      ["Django", "Flask-Login", "requests", "torch-audio", "uvicorn"].sort(),
+    expect(refs.map(r => r.pkg).sort()).toEqual(
+      ["Django", "Flask-Login", "requests", "torch-audio", "uvicorn"].sort()
     );
     for (const r of refs) expect(r.ecosystem).toBe("pypi");
-    expect(refs.find((r) => r.pkg === "requests")).toMatchObject({ filename: "requirements.txt", line: 2 });
-    expect(refs.find((r) => r.pkg === "Flask-Login")).toMatchObject({ line: 3 });
+    expect(refs.find(r => r.pkg === "requests")).toMatchObject({
+      filename: "requirements.txt",
+      line: 2,
+    });
+    expect(refs.find(r => r.pkg === "Flask-Login")).toMatchObject({ line: 3 });
   });
 
   it("skips comments, blanks, option lines, URLs, local paths and direct references", () => {
     const { refs } = extract("requirements.txt", reqs);
-    expect(refs.map((r) => r.pkg)).not.toContain("mypkg");
+    expect(refs.map(r => r.pkg)).not.toContain("mypkg");
     expect(refs).toHaveLength(5);
   });
 
   it("matches requirements variants and nested paths", () => {
     expect(extract("requirements-dev.txt", "pytest==8.0").refs).toHaveLength(1);
     expect(extract("dev-requirements.txt", "pytest==8.0").refs).toHaveLength(1);
-    expect(extract("backend/requirements.txt", "pytest==8.0").refs).toHaveLength(1);
+    expect(
+      extract("backend/requirements.txt", "pytest==8.0").refs
+    ).toHaveLength(1);
     expect(extract("notes.txt", "pytest==8.0").refs).toEqual([]);
   });
 });
@@ -134,8 +166,14 @@ describe("requirements.txt extraction", () => {
 describe("cross-file behavior", () => {
   it("dedupes the same package across manifests (first seen wins)", () => {
     const { refs } = extractManifestPackages([
-      { path: "package.json", content: '{ "dependencies": { "left-pad": "^1.0.0" } }' },
-      { path: "backend/package.json", content: '{ "dependencies": { "left-pad": "^1.0.0" } }' },
+      {
+        path: "package.json",
+        content: '{ "dependencies": { "left-pad": "^1.0.0" } }',
+      },
+      {
+        path: "backend/package.json",
+        content: '{ "dependencies": { "left-pad": "^1.0.0" } }',
+      },
     ]);
     expect(refs).toHaveLength(1);
     expect(refs[0].filename).toBe("package.json");
@@ -147,5 +185,21 @@ describe("cross-file behavior", () => {
     ]);
     expect(refs).toEqual([]);
     expect(errors).toEqual([]);
+  });
+});
+
+describe("composer names as their authors write them", () => {
+  it("keeps a dependency with capital letters instead of dropping it", () => {
+    // Packagist resolves case-insensitively. Without the `i` flag a real
+    // dependency was neither checked nor reported — silently dropped, which is
+    // the outcome this file's fail-safe contract exists to forbid.
+    expect(isComposerPackageName("PHPMailer/PHPMailer")).toBe(true);
+    expect(isComposerPackageName("Symfony/Console")).toBe(true);
+  });
+
+  it("still refuses something that is not a vendor/package pair", () => {
+    expect(isComposerPackageName("phpmailer")).toBe(false);
+    expect(isComposerPackageName("a/b/c")).toBe(false);
+    expect(isComposerPackageName("/leading")).toBe(false);
   });
 });

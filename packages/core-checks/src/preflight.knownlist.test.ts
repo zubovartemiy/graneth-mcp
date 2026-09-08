@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // flask-gpt/pypi is the first entry of the shipped snapshot (curated tier).
 const KNOWN_NAME = "flask-gpt";
 
-vi.mock("./registry.js", async (importOriginal) => {
+vi.mock("./registry.js", async importOriginal => {
   const orig = await importOriginal<typeof import("./registry.js")>();
   return { ...orig, packageExists: vi.fn(orig.packageExists) };
 });
@@ -26,15 +26,21 @@ const mockExists = vi.mocked(packageExists);
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
-const req = (name: string) => [{ path: "requirements.txt", content: `${name}==1.0.0\n` }];
+const req = (name: string) => [
+  { path: "requirements.txt", content: `${name}==1.0.0\n` },
+];
 
 describe("knownHallucination lookup", () => {
   it("finds a snapshot entry with its tier and misses unknown names", () => {
     // `pattern`, not `confirmed`: flask-gpt is a name Graneth built from the
     // documented "popular library + AI suffix" pattern. See the block at the
     // bottom of this file for why the old label was the defect.
-    expect(knownHallucination(KNOWN_NAME, "pypi")).toMatchObject({ tier: "pattern" });
-    expect(knownHallucination("definitely-not-in-snapshot-xyz", "pypi")).toBeNull();
+    expect(knownHallucination(KNOWN_NAME, "pypi")).toMatchObject({
+      tier: "pattern",
+    });
+    expect(
+      knownHallucination("definitely-not-in-snapshot-xyz", "pypi")
+    ).toBeNull();
     expect(knownHallucination(KNOWN_NAME, "npm")).toBeNull(); // ecosystem-scoped
   });
 });
@@ -43,10 +49,10 @@ describe("preFlightCheck × threat snapshot", () => {
   it("flags a known name as CRITICAL when it is still unregistered — one finding, no ghost_package duplicate", async () => {
     mockExists.mockResolvedValue({ exists: false } as any);
     const { verdict, findings } = await preFlightCheck(req(KNOWN_NAME));
-    const known = findings.filter((f) => f.type === "known_hallucination");
+    const known = findings.filter(f => f.type === "known_hallucination");
     expect(known).toHaveLength(1);
     expect(known[0].severity).toBe("critical");
-    expect(findings.some((f) => f.type === "ghost_package")).toBe(false);
+    expect(findings.some(f => f.type === "ghost_package")).toBe(false);
     expect(verdict).toBe("BLOCKED");
   });
 
@@ -57,26 +63,26 @@ describe("preFlightCheck × threat snapshot", () => {
       publishedAt: new Date(Date.now() - 3 * 86_400_000),
     } as any);
     const { verdict, findings } = await preFlightCheck(req(KNOWN_NAME));
-    const known = findings.filter((f) => f.type === "known_hallucination");
+    const known = findings.filter(f => f.type === "known_hallucination");
     expect(known).toHaveLength(1);
     expect(known[0].severity).toBe("critical");
     expect(known[0].description).toMatch(/registered/i);
     // The one authoritative finding replaces the weaker new-package warning.
-    expect(findings.some((f) => f.type === "new_package_risk")).toBe(false);
+    expect(findings.some(f => f.type === "new_package_risk")).toBe(false);
     expect(verdict).toBe("BLOCKED");
   });
 
   it("registry unreachable does not matter for a known name — the snapshot is local", async () => {
     mockExists.mockResolvedValue({ exists: false, unreachable: true } as any);
     const { findings } = await preFlightCheck(req(KNOWN_NAME));
-    expect(findings.some((f) => f.type === "known_hallucination")).toBe(true);
+    expect(findings.some(f => f.type === "known_hallucination")).toBe(true);
   });
 
   it("unknown names keep the existing behavior untouched", async () => {
     mockExists.mockResolvedValue({ exists: false } as any);
     const { findings } = await preFlightCheck(req("some-unknown-name"));
-    expect(findings.some((f) => f.type === "ghost_package")).toBe(true);
-    expect(findings.some((f) => f.type === "known_hallucination")).toBe(false);
+    expect(findings.some(f => f.type === "ghost_package")).toBe(true);
+    expect(findings.some(f => f.type === "known_hallucination")).toBe(false);
   });
 });
 
@@ -98,16 +104,24 @@ describe("preFlightCheck × a listed name that is a REAL, older package", () => 
     mockExists.mockResolvedValue({
       exists: true,
       isNewPackage: false,
-      publishedAt: new Date(`${entry.recorded}T00:00:00Z`).getTime() - 86_400_000
-        ? new Date(new Date(`${entry.recorded}T00:00:00Z`).getTime() - 86_400_000)
-        : null,
+      publishedAt:
+        new Date(`${entry.recorded}T00:00:00Z`).getTime() - 86_400_000
+          ? new Date(
+              new Date(`${entry.recorded}T00:00:00Z`).getTime() - 86_400_000
+            )
+          : null,
     } as any);
 
     const { findings } = await preFlightCheck(req(KNOWN_NAME));
-    const known = findings.filter((f) => f.type === "known_hallucination");
+    const known = findings.filter(f => f.type === "known_hallucination");
     expect(known).toHaveLength(1);
-    expect(known[0].severity, "a real, older package is not a critical threat").toBe("warning");
-    expect(known[0].description).not.toMatch(/SINCE BEEN REGISTERED|end-game|hostile/i);
+    expect(
+      known[0].severity,
+      "a real, older package is not a critical threat"
+    ).toBe("warning");
+    expect(known[0].description).not.toMatch(
+      /SINCE BEEN REGISTERED|end-game|hostile/i
+    );
     expect(known[0].recommendation).not.toMatch(/hostile/i);
     // It still says something useful: the model may have reached for a name
     // that sounds right rather than the library the developer meant.
@@ -115,13 +129,19 @@ describe("preFlightCheck × a listed name that is a REAL, older package", () => 
   });
 
   it("an unknown publish date is treated as the harmless case, never as a squat", async () => {
-    mockExists.mockResolvedValue({ exists: true, isNewPackage: false, publishedAt: null } as any);
+    mockExists.mockResolvedValue({
+      exists: true,
+      isNewPackage: false,
+      publishedAt: null,
+    } as any);
     const { findings } = await preFlightCheck(req(KNOWN_NAME));
-    const known = findings.filter((f) => f.type === "known_hallucination")[0];
+    const known = findings.filter(f => f.type === "known_hallucination")[0];
     expect(known.severity).toBe("warning");
     expect(known.description).not.toMatch(/SINCE BEEN REGISTERED|hostile/i);
     // And it says so, rather than implying the date was checked and cleared.
-    expect(known.description).toMatch(/could not establish when it was first published/i);
+    expect(known.description).toMatch(
+      /could not establish when it was first published/i
+    );
   });
 });
 
@@ -149,11 +169,13 @@ describe("the finding does not claim more provenance than the row has", () => {
   it("a pattern row is never described as a name models are KNOWN to invent", async () => {
     mockExists.mockResolvedValue({ exists: false } as any);
     const { findings } = await preFlightCheck(req(PATTERN_NAME));
-    const known = findings.filter((f) => f.type === "known_hallucination")[0];
+    const known = findings.filter(f => f.type === "known_hallucination")[0];
     // Still critical, still blocked — the name does not resolve, and that part
     // was never in doubt. What changes is the sentence about provenance.
     expect(known.severity).toBe("critical");
-    expect(known.description).not.toMatch(/known to invent|reported by|research/i);
+    expect(known.description).not.toMatch(
+      /known to invent|reported by|research/i
+    );
     expect(known.description).toMatch(/pattern/i);
     expect(known.description).not.toContain("confirmed tier");
   });
@@ -163,8 +185,11 @@ describe("the finding does not claim more provenance than the row has", () => {
     const { findings } = await preFlightCheck([
       { path: "requirements.txt", content: `${REPORTED_NAME}==1.0.0\n` },
     ]);
-    const known = findings.filter((f) => f.type === "known_hallucination")[0];
-    expect(known, `${REPORTED_NAME} is not in the shipped snapshot`).toBeTruthy();
+    const known = findings.filter(f => f.type === "known_hallucination")[0];
+    expect(
+      known,
+      `${REPORTED_NAME} is not in the shipped snapshot`
+    ).toBeTruthy();
     expect(known.description).toContain("outside research reports");
     // Not our construction — the two must never be described the same way.
     expect(known.description).not.toMatch(/our own construction/i);

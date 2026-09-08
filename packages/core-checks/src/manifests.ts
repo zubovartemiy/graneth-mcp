@@ -20,10 +20,16 @@ export interface ManifestExtraction {
   errors: ManifestParseError[];
 }
 
-const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
+const NPM_DEP_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
 
 /** Specifier protocols that do not resolve against the public npm registry. */
-const NON_REGISTRY_SPEC = /^(?:workspace|file|link|portal|git\+[a-z]+|git|github|catalog|ssh|https?):/;
+const NON_REGISTRY_SPEC =
+  /^(?:workspace|file|link|portal|git\+[a-z]+|git|github|catalog|ssh|https?):/;
 
 interface Accumulator extends ManifestExtraction {
   seen: Set<string>;
@@ -34,7 +40,8 @@ function basename(path: string): string {
   return parts[parts.length - 1];
 }
 
-export type ManifestKind = "package.json" | "requirements" | "cargo" | "gomod" | "gemfile" | "composer";
+export type ManifestKind =
+  "package.json" | "requirements" | "cargo" | "gomod" | "gemfile" | "composer";
 
 /** Which manifest format a path is, by basename — or null for non-manifests. */
 export function manifestKind(path: string): ManifestKind | null {
@@ -81,7 +88,7 @@ export function npmDependencyTarget(name: string, spec: string): string | null {
 /** 1-indexed line where `"name"` is declared (1 if not found — still valid). */
 function declarationLine(lines: string[], name: string): number {
   const needle = `"${name}"`;
-  const idx = lines.findIndex((l) => l.includes(needle));
+  const idx = lines.findIndex(l => l.includes(needle));
   return idx === -1 ? 1 : idx + 1;
 }
 
@@ -90,7 +97,10 @@ function collectPackageJson(file: FileInput, acc: Accumulator): void {
   try {
     parsed = JSON.parse(file.content);
   } catch (err) {
-    acc.errors.push({ file: file.path, message: err instanceof Error ? err.message : String(err) });
+    acc.errors.push({
+      file: file.path,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return;
   }
   if (typeof parsed !== "object" || parsed === null) return;
@@ -99,11 +109,18 @@ function collectPackageJson(file: FileInput, acc: Accumulator): void {
   for (const section of NPM_DEP_SECTIONS) {
     const deps = (parsed as Record<string, unknown>)[section];
     if (typeof deps !== "object" || deps === null) continue;
-    for (const [name, spec] of Object.entries(deps as Record<string, unknown>)) {
+    for (const [name, spec] of Object.entries(
+      deps as Record<string, unknown>
+    )) {
       if (typeof spec !== "string") continue;
       const target = npmDependencyTarget(name, spec);
       if (!target) continue;
-      pushRef(acc, { pkg: target, filename: file.path, line: declarationLine(lines, name), ecosystem: "npm" });
+      pushRef(acc, {
+        pkg: target,
+        filename: file.path,
+        line: declarationLine(lines, name),
+        ecosystem: "npm",
+      });
     }
   }
 }
@@ -138,7 +155,13 @@ function collectRequirementsTxt(file: FileInput, acc: Accumulator): void {
   const lines = file.content.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const pkg = parseRequirementLine(lines[i]);
-    if (pkg) pushRef(acc, { pkg, filename: file.path, line: i + 1, ecosystem: "pypi" });
+    if (pkg)
+      pushRef(acc, {
+        pkg,
+        filename: file.path,
+        line: i + 1,
+        ecosystem: "pypi",
+      });
   }
 }
 
@@ -146,8 +169,10 @@ function collectRequirementsTxt(file: FileInput, acc: Accumulator): void {
 
 /** True for `[dependencies]`-family section headers (incl. target-specific). */
 export function isCargoDepSection(header: string): boolean {
-  return /^(?:workspace\.)?(?:dev-|build-)?dependencies$/.test(header)
-    || /^target\.[^\]]+\.(?:dev-|build-)?dependencies$/.test(header);
+  return (
+    /^(?:workspace\.)?(?:dev-|build-)?dependencies$/.test(header) ||
+    /^target\.[^\]]+\.(?:dev-|build-)?dependencies$/.test(header)
+  );
 }
 
 /**
@@ -172,11 +197,21 @@ export function cargoDependencyTarget(line: string): string | null {
 function collectCargoToml(file: FileInput, acc: Accumulator): void {
   const lines = file.content.split("\n");
   let inDepSection = false;
-  let subtable: { name: string; line: number; renamed: string | null; local: boolean } | null = null;
+  let subtable: {
+    name: string;
+    line: number;
+    renamed: string | null;
+    local: boolean;
+  } | null = null;
 
   const flushSubtable = () => {
     if (subtable && !subtable.local) {
-      pushRef(acc, { pkg: subtable.renamed ?? subtable.name, filename: file.path, line: subtable.line, ecosystem: "crates" });
+      pushRef(acc, {
+        pkg: subtable.renamed ?? subtable.name,
+        filename: file.path,
+        line: subtable.line,
+        ecosystem: "crates",
+      });
     }
     subtable = null;
   };
@@ -188,8 +223,14 @@ function collectCargoToml(file: FileInput, acc: Accumulator): void {
       flushSubtable();
       const h = header[1].trim();
       // `[dependencies.NAME]` subtable form
-      const sub = h.match(/^(?:workspace\.)?(?:dev-|build-)?dependencies\.([A-Za-z0-9_-]+)$/);
-      if (sub) { subtable = { name: sub[1], line: i + 1, renamed: null, local: false }; inDepSection = false; continue; }
+      const sub = h.match(
+        /^(?:workspace\.)?(?:dev-|build-)?dependencies\.([A-Za-z0-9_-]+)$/
+      );
+      if (sub) {
+        subtable = { name: sub[1], line: i + 1, renamed: null, local: false };
+        inDepSection = false;
+        continue;
+      }
       inDepSection = isCargoDepSection(h);
       continue;
     }
@@ -201,7 +242,13 @@ function collectCargoToml(file: FileInput, acc: Accumulator): void {
     }
     if (!inDepSection) continue;
     const pkg = cargoDependencyTarget(line);
-    if (pkg) pushRef(acc, { pkg, filename: file.path, line: i + 1, ecosystem: "crates" });
+    if (pkg)
+      pushRef(acc, {
+        pkg,
+        filename: file.path,
+        line: i + 1,
+        ecosystem: "crates",
+      });
   }
   flushSubtable();
 }
@@ -212,11 +259,18 @@ function collectCargoToml(file: FileInput, acc: Accumulator): void {
  * One go.mod line → the module path required on that line, or null. Handles
  * both the single-line `require path vX` form and block-body `\tpath vX` lines.
  */
-export function goModRequireTarget(line: string, inRequireBlock: boolean): string | null {
-  const single = line.match(/^\s*require\s+([A-Za-z0-9][\w.~-]*\.[A-Za-z]{2,}(?:\/[\w.~-]+)+)\s+v\d/);
+export function goModRequireTarget(
+  line: string,
+  inRequireBlock: boolean
+): string | null {
+  const single = line.match(
+    /^\s*require\s+([A-Za-z0-9][\w.~-]*\.[A-Za-z]{2,}(?:\/[\w.~-]+)+)\s+v\d/
+  );
   if (single) return single[1];
   if (!inRequireBlock) return null;
-  const block = line.match(/^\s*([A-Za-z0-9][\w.~-]*\.[A-Za-z]{2,}(?:\/[\w.~-]+)+)\s+v\d/);
+  const block = line.match(
+    /^\s*([A-Za-z0-9][\w.~-]*\.[A-Za-z]{2,}(?:\/[\w.~-]+)+)\s+v\d/
+  );
   return block ? block[1] : null;
 }
 
@@ -225,13 +279,24 @@ function goModLocalReplacements(lines: string[]): Set<string> {
   const replaced = new Set<string>();
   let inBlock = false;
   for (const line of lines) {
-    if (/^\s*replace\s*\(/.test(line)) { inBlock = true; continue; }
-    if (inBlock && /^\s*\)/.test(line)) { inBlock = false; continue; }
+    if (/^\s*replace\s*\(/.test(line)) {
+      inBlock = true;
+      continue;
+    }
+    if (inBlock && /^\s*\)/.test(line)) {
+      inBlock = false;
+      continue;
+    }
     const m = line.match(/^\s*(?:replace\s+)?(\S+)(?:\s+\S+)?\s+=>\s+(\S+)/);
     if (!m) continue;
     if (!inBlock && !/^\s*replace\s/.test(line)) continue;
     const target = m[2];
-    if (target.startsWith("./") || target.startsWith("../") || target.startsWith("/")) replaced.add(m[1]);
+    if (
+      target.startsWith("./") ||
+      target.startsWith("../") ||
+      target.startsWith("/")
+    )
+      replaced.add(m[1]);
   }
   return replaced;
 }
@@ -242,8 +307,14 @@ function collectGoMod(file: FileInput, acc: Accumulator): void {
   let inRequire = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^\s*require\s*\(/.test(line)) { inRequire = true; continue; }
-    if (inRequire && /^\s*\)/.test(line)) { inRequire = false; continue; }
+    if (/^\s*require\s*\(/.test(line)) {
+      inRequire = true;
+      continue;
+    }
+    if (inRequire && /^\s*\)/.test(line)) {
+      inRequire = false;
+      continue;
+    }
     const pkg = goModRequireTarget(line, inRequire);
     if (pkg && !localReplaced.has(pkg)) {
       pushRef(acc, { pkg, filename: file.path, line: i + 1, ecosystem: "go" });
@@ -264,7 +335,8 @@ export function gemfileTarget(line: string): string | null {
   if (!m) return null;
   // `path:`/`git:`… (modern) and `:path =>`… (hashrocket) option syntaxes both
   // mean the gem is not registry-sourced.
-  if (/(?:^|[\s,:])(?:path|git|github|gist|branch)\s*(?::|=>)/.test(m[2])) return null;
+  if (/(?:^|[\s,:])(?:path|git|github|gist|branch)\s*(?::|=>)/.test(m[2]))
+    return null;
   return m[1];
 }
 
@@ -272,7 +344,13 @@ function collectGemfile(file: FileInput, acc: Accumulator): void {
   const lines = file.content.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const pkg = gemfileTarget(lines[i]);
-    if (pkg) pushRef(acc, { pkg, filename: file.path, line: i + 1, ecosystem: "gems" });
+    if (pkg)
+      pushRef(acc, {
+        pkg,
+        filename: file.path,
+        line: i + 1,
+        ecosystem: "gems",
+      });
   }
 }
 
@@ -280,12 +358,26 @@ function collectGemfile(file: FileInput, acc: Accumulator): void {
 
 /** Platform requirements (php runtime, extensions, system libs) — not Packagist names. */
 export function isComposerPlatformPackage(name: string): boolean {
-  return name === "php" || /^php-/.test(name) || name === "hhvm" || /^ext-/.test(name) || /^lib-/.test(name);
+  return (
+    name === "php" ||
+    /^php-/.test(name) ||
+    name === "hhvm" ||
+    /^ext-/.test(name) ||
+    /^lib-/.test(name)
+  );
 }
 
-/** True when a composer dependency name is a verifiable vendor/package pair. */
+/**
+ * True when a composer dependency name is a verifiable vendor/package pair.
+ *
+ * Case-INSENSITIVE. Packagist resolves names that way, and without the flag a
+ * real dependency written as its author writes it — `PHPMailer/PHPMailer` — was
+ * neither checked nor reported. Silently dropping a dependency is the one
+ * outcome this file's fail-safe contract forbids, and it dropped every composer
+ * package with a capital letter in it.
+ */
 export function isComposerPackageName(name: string): boolean {
-  return /^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9]([_.-]?[a-z0-9]+)*$/.test(name);
+  return /^[a-z0-9]([_.-]?[a-z0-9]+)*\/[a-z0-9]([_.-]?[a-z0-9]+)*$/i.test(name);
 }
 
 function collectComposerJson(file: FileInput, acc: Accumulator): void {
@@ -293,7 +385,10 @@ function collectComposerJson(file: FileInput, acc: Accumulator): void {
   try {
     parsed = JSON.parse(file.content);
   } catch (err) {
-    acc.errors.push({ file: file.path, message: err instanceof Error ? err.message : String(err) });
+    acc.errors.push({
+      file: file.path,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return;
   }
   if (typeof parsed !== "object" || parsed === null) return;
@@ -303,14 +398,22 @@ function collectComposerJson(file: FileInput, acc: Accumulator): void {
     const deps = (parsed as Record<string, unknown>)[section];
     if (typeof deps !== "object" || deps === null) continue;
     for (const name of Object.keys(deps as Record<string, unknown>)) {
-      if (isComposerPlatformPackage(name) || !isComposerPackageName(name)) continue;
-      pushRef(acc, { pkg: name, filename: file.path, line: declarationLine(lines, name), ecosystem: "composer" });
+      if (isComposerPlatformPackage(name) || !isComposerPackageName(name))
+        continue;
+      pushRef(acc, {
+        pkg: name,
+        filename: file.path,
+        line: declarationLine(lines, name),
+        ecosystem: "composer",
+      });
     }
   }
 }
 
 /** Extract registry-resolvable dependency declarations from manifest files. */
-export function extractManifestPackages(files: FileInput[]): ManifestExtraction {
+export function extractManifestPackages(
+  files: FileInput[]
+): ManifestExtraction {
   const acc: Accumulator = { refs: [], errors: [], seen: new Set() };
   for (const file of files) {
     const kind = manifestKind(file.path);
